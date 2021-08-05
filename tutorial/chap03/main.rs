@@ -88,6 +88,15 @@ fn second() {
 
 
 /***** 3.3 *****/
+
+// example1とexample2は同じ動作をする．個人的にはex2の方が好みかな
+fn example1() -> i32 {
+    1
+}
+fn example2() -> i32 {
+    return 1;
+}
+
 fn third() {
     // 関数の引数の書き方はPythonと同じ
     // fn hoge(x: i32, y: char) -> f64 {
@@ -101,6 +110,7 @@ fn third() {
     // x + 1 // これは式(x + 1という値を返す)．
     // x + 1; //式の後ろにセミコロンを付けると文になる
     // C言語だと，x = y = 6みたいに区別されないがrustでそんなことは出来ない
+    println!("ex1 : {}, ex2 : {}", example1(), example2());
     return;
 }
 
@@ -179,7 +189,7 @@ fn practice() {
 fn main() {
     // first();
     // second();
-    // third();
+    third();
     // fourth();
     // fifth();
     practice();
