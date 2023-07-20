@@ -1,6 +1,1 @@
 target/
-# *.lock
-# *.toml
-
-*.txt
-!chap12/mini_grep/src/poem.txt

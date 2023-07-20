@@ -1,22 +1,45 @@
 # Rust Practice
 
-特に必要に迫られて始めた訳では無いが，前から興味があったのと，公式のチュートリアル(THE BOOK)がとても丁寧で分かりやすかったのでやってみることにした <br>
-噂通り簡単ではないけど，他の言語にも通じる色々な学びがあって非常に良い
+` rust ` のおべんきょう
 
-<br>
+## Gettings Started
 
-## How to get start
+` WSL2 + VSCode ` を使用する
 
-Linux(WSL)ならこの一行で環境構築完了
 ```bash
-# in terminal
-$ curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 ```
 
-WinならC++ build toolsというものを入れた後，インストーラ(exe file)でインストールする必要がある(めんどくさい)
+```bash
+source "$HOME/.cargo/env"
+```
 
-<br>
+```bash
+code .
+```
 
-## Reference
-- (https://www.rust-lang.org/ja/learn) : このページを見れば何でも載ってる
-- (https://doc.rust-jp.rs/book-ja/) : ./tutorial/ ディレクトリではこのページを進めている
+VSCodeで拡張機能をインストール
+- `rust-lang.rust-analyzer`
+
+```bash
+rustup component add rust-src
+rustup component add rust-analysis
+rustup component add rustfmt
+rustup component add clippy
+```
+
+ここまでやれば，コード補完，実行，デバッグまで一通り出来るようになる
+
+## References
+### Ja
+#### 環境構築
+- <https://www.rust-lang.org/ja/tools/install>
+- <https://doc.rust-jp.rs/book-ja/ch01-01-installation.html>
+- <https://doc.rust-jp.rs/book-ja/appendix-04-useful-development-tools.html>
+#### 全般
+- <https://www.rust-lang.org/ja/learn>
+- <https://doc.rust-jp.rs/book-ja/>
+- <https://doc.rust-jp.rs/rust-by-example-ja/index.html>
+
+### Eng
+- <https://doc.rust-lang.org/book/>
