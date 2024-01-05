@@ -11,7 +11,7 @@ fn main() {
 
     r.sort();
     let mut prefix_sum = vec![0];
-    for &ri in &r {
+    for &ri in r.iter() {
         prefix_sum.push(prefix_sum.last().unwrap() + ri);
     }
     dbg!(&prefix_sum); // prints to stderr
