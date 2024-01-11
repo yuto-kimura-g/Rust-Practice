@@ -1,5 +1,5 @@
 [package]
-name = "abc334"
+name = "abc335"
 version = "0.1.0"
 edition = "2021"
 
@@ -27,5 +27,6 @@ path = "src/e.rs"
 
 [dependencies]
 itertools = "0.12.0"
-proconio = {version = "0.4.3", features = ["derive"]}
+petgraph = "0.6.4"
+proconio = { version = "0.4.3", features = ["derive"] }
 superslice = "1.0.0"
