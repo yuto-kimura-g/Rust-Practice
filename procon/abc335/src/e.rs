@@ -1,4 +1,7 @@
-use std::{cmp::max, cmp::Reverse, collections::BinaryHeap};
+use std::{
+    cmp::{Ordering, Reverse},
+    collections::BinaryHeap,
+};
 
 use proconio::{input, marker::Usize1};
 
@@ -6,39 +9,53 @@ fn main() {
     input! {
         n: usize,
         m: usize,
-        a: [i32; n],
+        a: [usize; n],
         uv: [(Usize1, Usize1); m]
     }
+
     let mut g = vec![vec![]; n];
     for &(u, v) in uv.iter() {
-        g[u].push(v);
-        g[v].push(u);
+        if a[u] < a[v] {
+            g[u].push(v);
+        } else if a[u] > a[v] {
+            g[v].push(u);
+        } else {
+            g[u].push(v);
+            g[v].push(u);
+        }
+        // match a[u].cmp(&a[v]) {
+        //     Ordering::Less => {
+        //         g[u].push(v);
+        //     }
+        //     Ordering::Equal => {
+        //         g[u].push(v);
+        //         g[v].push(u);
+        //     }
+        //     Ordering::Greater => {
+        //         g[v].push(u);
+        //     }
+        // }
     }
 
-    // score[i] := 1..=i までのスコア
+    // score[i] := 0..=i までのスコア
     let mut score = vec![0; n];
-
-    // score[0] = 1;
-    // let mut q = BinaryHeap::<(Reverse<i32>, usize)>::new();
-    // q.push((Reverse(a[0]), 0));
-    // // q.push((Reverse(0), move_to(0, 0)));
-    // let mut visited = vec![false; n];
-    // while let Some((Reverse(u), state)) = q.pop() {
-    //     visited[u] = true;
-    //     score[u] = max(score[u], state.len());
-    //     for &v in g[u].iter() {
-    //         if visited[v] {
-    //             continue;
-    //         }
-    //         if a[v] < a[u] {
-    //             // 広義単調増加(a[u] <= a[v])じゃないとスコアゼロなので，見る意味無し
-    //             continue;
-    //         }
-    //         state.insert(v);
-    //         q.push((Reverse(a[v]), state));
-    //     }
-    //     eprintln!("score:{:?}", score);
-    // }
+    let mut heap = BinaryHeap::new();
+    heap.push((Reverse(a[0]), 1, 0));
+    while let Some((_, s, u)) = heap.pop() {
+        if score[u] > 0 {
+            continue;
+        }
+        score[u] = s;
+        for &v in g[u].iter() {
+            assert!(a[u] <= a[v]);
+            if score[v] > 0 {
+                continue;
+            }
+            let ss = if a[u] < a[v] { score[u] + 1 } else { score[u] };
+            heap.push((Reverse(a[v]), ss, v));
+        }
+    }
+    eprintln!("{:?}", score);
 
     let ans = score.last().unwrap();
     println!("{}", ans);
