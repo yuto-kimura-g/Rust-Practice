@@ -1,10 +1,12 @@
 use my_util::*;
 use proconio::{fastout, input, marker::Chars};
+use rand::Rng;
+use std::{cmp::max, cmp::min, time::Instant};
 
 #[fastout]
 fn main() {
     let input = Input::new();
-    let output = solver::solve(input);
+    let output = solve(input);
     output.write();
 }
 
@@ -15,11 +17,11 @@ const M: usize = 200;
 /// 操作回数の上限
 const L_LIMIT: usize = 5000;
 /// 実行時間制限 [msec]
-const TIME_LIMIT: f64 = 1800.0;
-// const TIME_LIMIT: f64 = 18000.0;
+const TIME_LIMIT: f64 = 1950.0;
+// const TIME_LIMIT: f64 = 15000.0;
 
 /// 入力によって一意に定まる情報
-pub struct Input {
+struct Input {
     sy: usize,
     sx: usize,
     a: Vec<Vec<usize>>,
@@ -130,7 +132,7 @@ impl Input {
 }
 
 /// 出力する情報
-pub struct Output {
+struct Output {
     ans_yx: Vec<(usize, usize)>,
 }
 impl Output {
@@ -143,185 +145,220 @@ impl Output {
     }
 }
 
-pub mod solver {
-    use super::*;
-    use rand::Rng;
-    use std::{cmp::max, cmp::min, time::Instant};
-
-    /// 解を表現する情報
-    #[derive(Clone, Debug)]
-    struct State {
-        /// ans_t[i] := t[i]を訪れる順番
-        ans_t: Vec<usize>,
-        total_cost: i64,
-    }
-    impl State {
-        fn new() -> Self {
-            State {
-                ans_t: Vec::new(),
-                total_cost: 0,
-            }
-        }
-
-        fn insert_mark(&mut self) {
-            self.ans_t.insert(0, usize::MAX);
-        }
-
-        fn remove_mark(&mut self) {
-            self.ans_t.remove(0);
-        }
-
-        /// コストからスコアを計算：O(1)
-        fn eval_score(&self) -> i64 {
-            max(10000 - self.total_cost, 1001)
-        }
-
-        /// ans_t からコストを再計算，スコアを計算：Θ(M)
-        fn eval_score_from_t(&mut self, input: &Input) -> i64 {
-            self.total_cost = 0;
-            let (mut cur_y, mut cur_x) = (input.sy, input.sx);
-            for &i in self.ans_t.iter() {
-                if i == usize::MAX {
-                    // skip mark
-                    continue;
-                }
-                // move cur to t[i][0]
-                self.total_cost +=
-                    input.neighbor_dist[cur_y][cur_x][*input.t[i].first().unwrap()] as i64;
-                (cur_y, cur_x) = input.neighbor[cur_y][cur_x][*input.t[i].first().unwrap()];
-                // move t[i][0] to t[i][-1]
-                let t_tail = *input.nn_path[cur_y][cur_x][i].last().unwrap();
-                self.total_cost += input.nn_path_dist[cur_y][cur_x][i] as i64;
-                (cur_y, cur_x) = t_tail;
-            }
-            self.eval_score()
+/// 解を表現する情報
+#[derive(Clone, Debug)]
+struct State {
+    /// ans_t[i] := t[i]を訪れる順番
+    ans_t: Vec<usize>,
+    total_cost: i64,
+}
+impl State {
+    fn new() -> Self {
+        State {
+            ans_t: Vec::new(),
+            total_cost: 0,
         }
     }
 
-    /// 解く
-    pub fn solve(input: Input) -> Output {
-        // 初期解
-        // stateを作る
-        let mut state = State::new();
+    fn insert_mark(&mut self) {
+        self.ans_t.insert(0, usize::MAX);
+    }
+
+    fn remove_mark(&mut self) {
+        self.ans_t.remove(0);
+    }
+
+    /// コストからスコアを計算：Θ(1)
+    fn eval_score(&self) -> i64 {
+        max(10000 - self.total_cost, 1001)
+    }
+
+    /// ans_t からコストを再計算，スコアを計算：O(M)
+    /// 高速化のため，コストが閾値より大きくなれば，計算を打ち切ってNoneを返す
+    fn eval_score_from_t(&mut self, input: &Input, cost_threshold: i64) -> Option<i64> {
+        self.total_cost = 0;
         let (mut cur_y, mut cur_x) = (input.sy, input.sx);
-        for (i, ti) in input.t.iter().enumerate() {
-            // ans_t
-            state.ans_t.push(i);
+        for &i in self.ans_t.iter() {
+            if i == usize::MAX {
+                // skip mark
+                continue;
+            }
+            let ti0 = *input.t[i].first().unwrap();
             // total_cost: move cur to t[i][0]
-            state.total_cost += input.neighbor_dist[cur_y][cur_x][ti[0]] as i64;
+            self.total_cost += input.neighbor_dist[cur_y][cur_x][ti0] as i64;
             // move cur to t[i][0]
-            (cur_y, cur_x) = input.neighbor[cur_y][cur_x][ti[0]];
+            (cur_y, cur_x) = input.neighbor[cur_y][cur_x][ti0];
             // total_cost: move t[i][0] to t[i][-1]
-            state.total_cost += input.nn_path_dist[cur_y][cur_x][i] as i64;
+            self.total_cost += input.nn_path_dist[cur_y][cur_x][i] as i64;
             // move t[i][0] to t[i][-1]
             (cur_y, cur_x) = *input.nn_path[cur_y][cur_x][i].last().unwrap();
-        }
-
-        // 焼く
-        // TODO: overlapを考慮したい
-        state.insert_mark();
-        state = solver::annealing(&input, &state);
-        state.remove_mark();
-
-        // ans_tからans_yxを作る
-        let mut ans_yx = Vec::new();
-        let (mut cur_y, mut cur_x) = (input.sy, input.sx);
-        for &i in state.ans_t.iter() {
-            for &c in input.t[i].iter() {
-                (cur_y, cur_x) = input.neighbor[cur_y][cur_x][c];
-                ans_yx.push((cur_y, cur_x));
+            if self.total_cost > cost_threshold {
+                return None;
             }
         }
+        Some(self.eval_score())
+    }
+}
 
-        eprintln!(
-            "Score = {}, Cost = {}",
-            state.eval_score_from_t(&input),
-            state.total_cost,
-        );
-        Output { ans_yx }
+/// 解く
+fn solve(input: Input) -> Output {
+    // 初期解
+    let mut state = State::new();
+    state.ans_t = (0..M).collect::<Vec<usize>>();
+    state.insert_mark();
+    let _ = state.eval_score_from_t(&input, i64::MAX); // calc total_cost
+
+    // 焼く
+    // TODO: overlapを考慮したい
+    state = annealing(&input, &state);
+    state.remove_mark();
+
+    // ans_tからans_yxを作る
+    let mut ans_yx = Vec::new();
+    let (mut cur_y, mut cur_x) = (input.sy, input.sx);
+    for &i in state.ans_t.iter() {
+        for &c in input.t[i].iter() {
+            (cur_y, cur_x) = input.neighbor[cur_y][cur_x][c];
+            ans_yx.push((cur_y, cur_x));
+        }
     }
 
-    /// 焼く
-    fn annealing(input: &Input, init_state: &State) -> State {
-        let start_time = Instant::now();
-        // parameter
-        let start_temp = 50f64;
-        let end_temp = 1e-5;
-        let mut temp = start_temp;
-        let mut rng = rand_pcg::Pcg64Mcg::new(42);
-        // solution
-        let init_score = init_state.eval_score();
-        let mut state = init_state.clone();
-        let mut best_state = init_state.clone();
-        // info
-        let mut min_delta = i64::MAX;
-        let mut max_delta = i64::MIN;
-        let mut iter_cnt: i64 = 0;
-        let mut move_cnt: i64 = 0;
-        let mut update_cnt: i64 = 0;
-        'main: loop {
-            iter_cnt += 1;
-            // 温度更新
-            if (iter_cnt & ((1 << 4) - 1)) == 0 {
-                // ref: terry_u16さんの実装(https://atcoder.jp/contests/ahc028/submissions/49221892)
-                // 16回に1回，温度を更新
-                let t = start_time.elapsed().as_millis() as f64 / TIME_LIMIT;
-                if t >= 1.0 {
-                    break 'main;
-                }
-                temp = f64::powf(start_temp, 1.0 - t) * f64::powf(end_temp, t);
+    eprintln!(
+        "Score = {}, Cost = {}",
+        state.eval_score_from_t(&input, i64::MAX).unwrap(),
+        state.total_cost,
+    );
+    Output { ans_yx }
+}
+
+/// 焼く
+fn annealing(input: &Input, init_state: &State) -> State {
+    let start_time = Instant::now();
+    // parameter
+    const START_TEMP: f64 = 50.0;
+    const END_TEMP: f64 = 1e-5;
+    let mut temp = START_TEMP;
+    let mut rng = rand_pcg::Pcg64Mcg::new(42);
+    const NEIGHBOR_TYPE_NUM: usize = 2;
+    // solution
+    let init_score = init_state.eval_score();
+    let mut state = init_state.clone();
+    let mut best_state = init_state.clone();
+    // info
+    let mut min_delta = vec![i64::MAX; NEIGHBOR_TYPE_NUM];
+    let mut max_delta = vec![i64::MIN; NEIGHBOR_TYPE_NUM];
+    let mut iter_cnt = 0i64;
+    let mut iter_each_cnt = vec![0; NEIGHBOR_TYPE_NUM];
+    let mut move_cnt = vec![0; NEIGHBOR_TYPE_NUM];
+    let mut update_cnt = vec![0; NEIGHBOR_TYPE_NUM];
+    'main: loop {
+        iter_cnt += 1;
+        // 時間更新
+        if (iter_cnt & ((1 << 4) - 1)) == 0 {
+            // NOTE: 高速化
+            //      ref: terry_u16さんの実装(https://atcoder.jp/contests/ahc028/submissions/49221892)
+            //      時間計測がボトルネックにならないように，頻度を減らす．
+            //      この例だと，16回に1回，時間を更新する．
+            //      また，%で割り算すると遅いので，&のビット演算で高速化．
+            let t = start_time.elapsed().as_millis() as f64 / TIME_LIMIT;
+            if t >= 1.0 {
+                break 'main;
             }
+            // 温度更新
+            temp = f64::powf(START_TEMP, 1.0 - t) * f64::powf(END_TEMP, t);
+        }
 
-            // 近傍操作
-            // shift(t_i): t_iを一番後ろに
-            // t_i-1 -> t_i -> t_i+1 ... t_e
-            // t_i-1 -> t_i+1 ... t_e -> t_i
-            let mut new_state = state.clone();
-            let e = state.ans_t.len() - 1;
-            let i = rng.gen_range(1..=(e - 1));
-            // ans_t
-            new_state.ans_t.clear();
-            new_state.ans_t.extend_from_slice(&state.ans_t[..=(i - 1)]);
-            new_state.ans_t.extend_from_slice(&state.ans_t[(i + 1)..]);
-            new_state.ans_t.push(state.ans_t[i]);
-            // 良くなりますか？
-            // costは小さいほど良い
-            // scoreは大きいほど良い
-            let score_delta = new_state.eval_score_from_t(input) - state.eval_score_from_t(input);
+        // 近傍操作
+        let neighbor_type: usize = rng.gen_range(0..NEIGHBOR_TYPE_NUM);
+        iter_each_cnt[neighbor_type] += 1;
+        let mut new_state: State = match neighbor_type {
+            0 => {
+                // shift近傍：変化小さめ
+                // shift(t_i): t_iを一番後ろに
+                // t_i-1 -> t_i -> t_i+1 ... t_e
+                // t_i-1 -> t_i+1 ... t_e -> t_i
+                let e = state.ans_t.len() - 1;
+                let i = rng.gen_range(1..(e));
+                let mut new_state = state.clone();
+                // ans_t
+                new_state.ans_t.clear();
+                new_state.ans_t.extend_from_slice(&state.ans_t[..=(i - 1)]);
+                new_state.ans_t.extend_from_slice(&state.ans_t[(i + 1)..]);
+                new_state.ans_t.push(state.ans_t[i]);
+                new_state
+            }
+            1 => {
+                // swap近傍：変化大きめ
+                // swap(t_i, t_j): t_iとt_jを入れ替える
+                // t_i-1 -> t_i -> t_i+1 ... t_j-1 -> t_j -> t_j+1
+                // t_i-1 -> t_j -> t_i+1 ... t_j-1 -> t_i -> t_j+1
+                let e = state.ans_t.len() - 1;
+                let i = rng.gen_range(1..(e - 3));
+                let j = rng.gen_range((i + 1)..(e - 1));
+                let mut new_state = state.clone();
+                // ans_t
+                new_state.ans_t.swap(i, j);
+                new_state
+            }
+            _ => unreachable!(),
+        };
 
-            // 遷移
-            if score_delta >= 0 || rng.gen_bool(f64::exp(score_delta as f64 / temp)) {
+        // 遷移
+        // 最大化なのか，最小化なのか注意
+        //      costは小さいほど良い
+        //      scoreは大きいほど良い
+        // NOTE: 高速化
+        //      ref: https://qiita.com/not522/items/cd20b87157d15850d31c
+        //      cur_c > new_c, cur_c-new_c > 0 なら改善
+        //      delta=cur_c-new_c,
+        //      IF exp(delta/T) >= rand(0,1): THEN accept
+        //      exp((cur_c-new_c)/T) >= rand(0,1) を式変形して，
+        //      (cur_c-new_c)/T >= log(rand(0,1))（両辺logを取る）
+        //      (cur_c-new_c) >= T*log(rand(0,1))（両辺にTを掛ける）
+        //      cur_c - T*log(rand(0,1)) >= new_c（移項）
+        //      とすれば，左辺は前計算可能．これを閾値とする．
+        //      スコア計算関数の引数に閾値を追加して，閾値を超えたら計算を打ち切ることで高速化できる
+        let cur_score = state.eval_score();
+        let cost_threshold = state.total_cost - (temp * rng.gen::<f64>().ln()).ceil() as i64;
+        match new_state.eval_score_from_t(input, cost_threshold) {
+            None => continue,
+            Some(new_score) => {
                 // 近傍に移動してみる
-                move_cnt += 1;
+                move_cnt[neighbor_type] += 1;
                 state = new_state;
-                min_delta = min(min_delta, score_delta);
-                max_delta = max(max_delta, score_delta);
+                let score_delta = new_score - cur_score;
+                min_delta[neighbor_type] = min(min_delta[neighbor_type], score_delta);
+                max_delta[neighbor_type] = max(max_delta[neighbor_type], score_delta);
                 if state.eval_score() > best_state.eval_score() {
                     // ベストを更新した
-                    update_cnt += 1;
+                    update_cnt[neighbor_type] += 1;
                     best_state = state.clone();
                     eprintln!(
-                        "update|iter:{}/{}|score:{}",
+                        "update|iter:{:?}/{}|score:{}",
                         update_cnt,
                         iter_cnt,
                         best_state.eval_score()
                     );
                 }
             }
-        } // end of 'main
+        };
+    } // end of 'main
 
-        eprintln!("==================== annealing ====================");
-        eprintln!("elapsed\t\t:{} [ms]", start_time.elapsed().as_millis());
-        eprintln!("iter\tmove\t:{}", move_cnt);
-        eprintln!("\tupdate\t:{}", update_cnt);
-        eprintln!("\ttotal\t:{}", iter_cnt);
-        eprintln!("delta\tmin/max\t:{} / {}", min_delta, max_delta);
-        eprintln!("score\tinit\t:{}", init_score);
-        eprintln!("\tbest\t:{}", best_state.eval_score());
-        eprintln!("===================================================");
+    eprintln!("==================== annealing ====================");
+    eprintln!("elapsed\t\t:{} [ms]", start_time.elapsed().as_millis());
+    eprintln!("iter\tmove\t:{:?}", move_cnt);
+    eprintln!("\tupdate\t:{:?}", update_cnt);
+    eprintln!(
+        "\ttotal\t:{:?},{}",
+        iter_each_cnt,
+        iter_each_cnt.iter().sum::<u32>()
+    );
+    eprintln!("delta\tmin/max\t:{:?} / {:?}", min_delta, max_delta);
+    eprintln!("score\tinit\t:{}", init_score);
+    eprintln!("\tbest\t:{}", best_state.eval_score());
+    eprintln!("===================================================");
 
-        best_state
-    }
+    best_state
 }
 
 pub mod my_util {
@@ -335,5 +372,22 @@ pub mod my_util {
 
     pub fn eval_dist((y, x): (usize, usize), (yy, xx): (usize, usize)) -> u32 {
         (y.abs_diff(yy) + x.abs_diff(xx) + 1) as u32
+    }
+
+    #[test]
+    fn test_char() {
+        assert_eq!(char_to_usize('A'), 0);
+        assert_eq!(char_to_usize('Z'), 25);
+        assert_eq!(usize_to_char(0), 'A');
+        assert_eq!(usize_to_char(25), 'Z');
+        assert_eq!('A', usize_to_char(char_to_usize('A')));
+        assert_eq!('Z', usize_to_char(char_to_usize('Z')));
+    }
+    #[test]
+    fn test_dist() {
+        assert_eq!(eval_dist((0, 0), (0, 0)), 1);
+        assert_eq!(eval_dist((0, 0), (0, 1)), 2);
+        assert_eq!(eval_dist((0, 0), (1, 0)), 2);
+        assert_eq!(eval_dist((0, 0), (1, 1)), 3);
     }
 }
