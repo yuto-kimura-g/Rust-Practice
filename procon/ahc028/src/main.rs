@@ -173,9 +173,9 @@ impl State {
         max(10000 - self.total_cost, 1001)
     }
 
-    /// ans_t からコストを再計算，スコアを計算：O(M)
+    /// ans_t からコストを再計算：O(M)
     /// 高速化のため，コストが閾値より大きくなれば，計算を打ち切ってNoneを返す
-    fn eval_score_from_t(&mut self, input: &Input, cost_threshold: i64) -> Option<i64> {
+    fn eval_cost_from_t(&mut self, input: &Input, cost_threshold: i64) -> Option<i64> {
         self.total_cost = 0;
         let (mut cur_y, mut cur_x) = (input.sy, input.sx);
         for &i in self.ans_t.iter() {
@@ -196,7 +196,7 @@ impl State {
                 return None;
             }
         }
-        Some(self.eval_score())
+        Some(self.total_cost)
     }
 }
 
@@ -206,7 +206,7 @@ fn solve(input: Input) -> Output {
     let mut state = State::new();
     state.ans_t = (0..M).collect::<Vec<usize>>();
     state.insert_mark();
-    let _ = state.eval_score_from_t(&input, i64::MAX); // calc total_cost
+    let _ = state.eval_cost_from_t(&input, i64::MAX); // calc total_cost
 
     // 焼く
     // TODO: overlapを考慮したい
@@ -225,8 +225,8 @@ fn solve(input: Input) -> Output {
 
     eprintln!(
         "Score = {}, Cost = {}",
-        state.eval_score_from_t(&input, i64::MAX).unwrap(),
-        state.total_cost,
+        state.eval_score(),
+        state.eval_cost_from_t(&input, i64::MAX).unwrap(),
     );
     Output { ans_yx }
 }
@@ -309,27 +309,19 @@ fn annealing(input: &Input, init_state: &State) -> State {
         //      scoreは大きいほど良い
         // NOTE: 高速化
         //      ref: https://qiita.com/not522/items/cd20b87157d15850d31c
-        //      cur_c > new_c, cur_c-new_c > 0 なら改善
-        //      delta=cur_c-new_c,
-        //      IF exp(delta/T) >= rand(0,1): THEN accept
-        //      exp((cur_c-new_c)/T) >= rand(0,1) を式変形して，
-        //      (cur_c-new_c)/T >= log(rand(0,1))（両辺logを取る）
-        //      (cur_c-new_c) >= T*log(rand(0,1))（両辺にTを掛ける）
-        //      cur_c - T*log(rand(0,1)) >= new_c（移項）
-        //      とすれば，左辺は前計算可能．これを閾値とする．
-        //      スコア計算関数の引数に閾値を追加して，閾値を超えたら計算を打ち切ることで高速化できる
-        let cur_score = state.eval_score();
+        //      コスト計算関数の引数に閾値を追加して，閾値を超えたら計算を打ち切ることで高速化できる
         let cost_threshold = state.total_cost - (temp * rng.gen::<f64>().ln()).ceil() as i64;
-        match new_state.eval_score_from_t(input, cost_threshold) {
+        match new_state.eval_cost_from_t(input, cost_threshold) {
             None => continue,
-            Some(new_score) => {
+            Some(new_cost) => {
+                // (exp(delta/T) >= rand(0,1)) == true
                 // 近傍に移動してみる
                 move_cnt[neighbor_type] += 1;
+                let cost_delta = new_cost - state.total_cost;
+                min_delta[neighbor_type] = min(min_delta[neighbor_type], cost_delta);
+                max_delta[neighbor_type] = max(max_delta[neighbor_type], cost_delta);
                 state = new_state;
-                let score_delta = new_score - cur_score;
-                min_delta[neighbor_type] = min(min_delta[neighbor_type], score_delta);
-                max_delta[neighbor_type] = max(max_delta[neighbor_type], score_delta);
-                if state.eval_score() > best_state.eval_score() {
+                if state.total_cost < best_state.total_cost {
                     // ベストを更新した
                     update_cnt[neighbor_type] += 1;
                     best_state = state.clone();
