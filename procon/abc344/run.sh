@@ -1,20 +1,24 @@
 #!/bin/sh
 
+# Usage: sh run.sh <problem> <testcase> <feature>
+# Example: sh run.sh a 5 local
+
 set -e # exit on error
 set -u # use strict
 
-p=${1}
-i=${2:-5}
+problem=${1}
+n=${2:-5}
+feature=${3:-"judge"}
 
-cargo build --bin "${p}"
+cargo build --bin "${problem}" --features "${feature}"
 
-for i in `seq 1 ${i}`;
+for i in `seq 1 ${n}`;
 do
-    if [ -e "in/${p}${i}.in" ]; then
-        echo "[in] ${p}${i}.in"
+    if [ -e "in/${problem}${i}.in" ]; then
+        echo "[in] ${problem}${i}.in"
     else
         break
     fi
-    "target/debug/${p}" < "in/${p}${i}.in" 2> /dev/null
-    # python3 "src/bin/${p}.py" < "in/${p}${i}.in"
+    "target/debug/${problem}" < "in/${problem}${i}.in"
+    # python3 "src/bin/${problem}.py" < "in/${problem}${i}.in"
 done
