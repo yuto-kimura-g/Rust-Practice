@@ -1,0 +1,7 @@
+{
+    "recommendations": [
+        "rust-lang.rust-analyzer",
+        "github.copilot",
+        "vadimcn.vscode-lldb"
+    ]
+}
